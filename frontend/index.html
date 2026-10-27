@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevShop</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2230; --muted:#667085; --accent:#2f6fed; --border:#e3e6ec; --ok:#157f4b; --err:#c0362c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151c; --card:#1b2030; --text:#e8ebf2; --muted:#9aa3b5; --accent:#6c9bff; --border:#2b3248; --ok:#4cc38a; --err:#ff7b72; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; background:var(--card); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin:0; font-size:20px; }
+  #status { font-size:13px; color:var(--muted); }
+  main { max-width:1000px; margin:0 auto; padding:24px; }
+  h2 { font-size:16px; margin:24px 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .card h3 { margin:0; font-size:16px; }
+  .price { font-size:20px; font-weight:600; }
+  .stock { font-size:13px; color:var(--muted); }
+  .row { display:flex; gap:8px; margin-top:4px; }
+  input[type=number] { width:64px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); }
+  button { flex:1; padding:8px 12px; border:0; border-radius:6px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; font-size:14px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:500; }
+  .wrap { overflow-x:auto; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 16px; border-radius:8px; background:var(--card); border:1px solid var(--border); display:none; }
+  #toast.ok { color:var(--ok); } #toast.err { color:var(--err); }
+</style>
+</head>
+<body>
+<header><h1>DevShop</h1><span id="status">connecting…</span></header>
+<main>
+  <h2>Products</h2>
+  <div id="products" class="grid"></div>
+  <h2>Orders</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Order ID</th><th>Product</th><th>Qty</th><th>Status</th></tr></thead>
+    <tbody id="orders"><tr><td colspan="4">No orders yet</td></tr></tbody>
+  </table></div>
+</main>
+<div id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+let names = {};
+
+function toast(msg, ok) {
+  const t = $('toast'); t.textContent = msg; t.className = ok ? 'ok' : 'err'; t.style.display = 'block';
+  setTimeout(() => (t.style.display = 'none'), 3000);
+}
+async function api(path, opts) {
+  const r = await fetch('/api' + path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.detail || 'Request failed (' + r.status + ')');
+  return data;
+}
+function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+
+async function loadProducts() {
+  const products = await api('/products');
+  const box = $('products'); box.replaceChildren();
+  for (const p of products) {
+    names[p.id] = p.name;
+    let stock = '?';
+    try { stock = (await api('/stock/' + p.id)).stock; } catch (e) {}
+    const card = el('div', undefined, 'card');
+    const qty = el('input'); qty.type = 'number'; qty.min = 1; qty.value = 1;
+    const btn = el('button', 'Buy'); btn.disabled = stock === 0;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        await api('/orders', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ productId: p.id, qty: Number(qty.value) }) });
+        toast('Order placed for ' + p.name, true);
+        await Promise.all([loadProducts(), loadOrders()]);
+      } catch (e) { toast(e.message, false); btn.disabled = false; }
+    };
+    const row = el('div', undefined, 'row'); row.append(qty, btn);
+    card.append(el('h3', p.name), el('div', '$' + p.price.toFixed(2), 'price'), el('div', stock + ' in stock', 'stock'), row);
+    box.append(card);
+  }
+}
+async function loadOrders() {
+  const orders = await api('/orders');
+  const body = $('orders'); body.replaceChildren();
+  if (!orders.length) { const tr = el('tr'); const td = el('td', 'No orders yet'); td.colSpan = 4; tr.append(td); body.append(tr); return; }
+  for (const o of orders.slice().reverse()) {
+    const tr = el('tr');
+    tr.append(el('td', o.id.slice(0, 8)), el('td', names[o.productId] || o.productId), el('td', String(o.qty)), el('td', o.status));
+    body.append(tr);
+  }
+}
+(async () => {
+  try { await loadProducts(); await loadOrders(); $('status').textContent = 'connected'; }
+  catch (e) { $('status').textContent = 'backend unavailable'; toast(e.message, false); }
+})();
+</script>
+</body>
+</html>

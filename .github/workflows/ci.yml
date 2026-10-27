@@ -30,7 +30,7 @@ jobs:
     permissions: { contents: read, packages: write }
     strategy:
       matrix:
-        service: [gateway, product, inventory, order]
+        service: [frontend, gateway, product, inventory, order]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -65,4 +65,4 @@ jobs:
           export KUBECONFIG=$PWD/kubeconfig
           sed -i "s#YOUR_ORG#${{ github.repository_owner }}#g; s#:latest#:${{ github.sha }}#g" k8s/services.yaml
           kubectl apply -f k8s/namespace.yaml -f k8s/services.yaml
-          for s in gateway product inventory order; do kubectl -n shop rollout status deploy/$s --timeout=120s; done
+          for s in frontend gateway product inventory order; do kubectl -n shop rollout status deploy/$s --timeout=120s; done

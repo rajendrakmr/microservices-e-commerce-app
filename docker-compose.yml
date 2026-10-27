@@ -21,3 +21,7 @@ services:
     image: grafana/grafana:11.2.0
     ports: ["3000:3000"]
     depends_on: [prometheus]
+  frontend:
+    build: ./frontend
+    ports: ["8090:8090"]
+    depends_on: [gateway]
