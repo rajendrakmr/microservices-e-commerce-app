@@ -4,9 +4,10 @@ export const dynamic = 'force-dynamic';
 
 // Runtime proxy: browser -> Next.js (/api/*) -> gateway service.
 // GATEWAY_URL is read at request time so one image works in every environment.
-async function handler(req: NextRequest, { params }: { params: { path: string[] } }) {
+async function handler(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
   const gateway = process.env.GATEWAY_URL ?? 'http://gateway:8080';
-  const url = `${gateway}/api/${params.path.join('/')}${req.nextUrl.search}`;
+  const url = `${gateway}/api/${path.join('/')}${req.nextUrl.search}`;
   try {
     const hasBody = !['GET', 'HEAD'].includes(req.method);
     const upstream = await fetch(url, {
