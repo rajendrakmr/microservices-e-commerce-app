@@ -168,9 +168,11 @@ spec:
         - name: frontend
           image: ghcr.io/YOUR_ORG/shop-frontend:latest
           ports: [{ containerPort: 8090 }]
+          env:
+            - { name: GATEWAY_URL, value: "http://gateway:8080" }
           resources:
-            requests: { cpu: 25m, memory: 32Mi }
-            limits: { cpu: 100m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
           readinessProbe: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 2 }
           livenessProbe: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5 }
 ---
