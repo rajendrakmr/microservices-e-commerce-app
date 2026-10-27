@@ -24,4 +24,5 @@ services:
   frontend:
     build: ./frontend
     ports: ["8090:8090"]
+    environment: { GATEWAY_URL: "http://gateway:8080" }
     depends_on: [gateway]

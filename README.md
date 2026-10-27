@@ -2,13 +2,13 @@
 
 | Service   | Language          | Port | Role                              |
 |-----------|-------------------|------|-----------------------------------|
-| frontend  | HTML/JS + nginx   | 8090 | Storefront UI, proxies /api       |
+| frontend  | Next.js + RTK     | 8090 | Storefront UI, proxies /api       |
 | gateway   | Node.js (Express) | 8080 | Single entry point / routing      |
 | product   | Python (FastAPI)  | 8081 | Product catalog                   |
 | inventory | Go                | 8082 | Stock levels & reservation        |
 | order     | Java 21           | 8083 | Orders; calls inventory over HTTP |
 
-Flow: `browser -> frontend (nginx) -> gateway -> product | order -> inventory`
+Flow: `browser -> frontend (Next.js) -> gateway -> product | order -> inventory`
 
 ## Run locally
     make up && make smoke
