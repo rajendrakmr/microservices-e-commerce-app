@@ -1,0 +1,68 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd gateway && npm install && npm test
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: cd product && pip install -r requirements.txt && pytest
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.22" }
+      - run: cd inventory && go vet ./... && go test ./...
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - run: cd order && javac OrderService.java
+
+  build-scan-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    strategy:
+      matrix:
+        service: [gateway, product, inventory, order]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          load: true
+          tags: ${{ env.REGISTRY }}/shop-${{ matrix.service }}:${{ github.sha }}
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/shop-${{ matrix.service }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: "1"
+      - name: Push image
+        if: github.ref == 'refs/heads/main'
+        run: docker push ${{ env.REGISTRY }}/shop-${{ matrix.service }}:${{ github.sha }}
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Kubernetes
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
+          sed -i "s#YOUR_ORG#${{ github.repository_owner }}#g; s#:latest#:${{ github.sha }}#g" k8s/services.yaml
+          kubectl apply -f k8s/namespace.yaml -f k8s/services.yaml
+          for s in gateway product inventory order; do kubectl -n shop rollout status deploy/$s --timeout=120s; done
